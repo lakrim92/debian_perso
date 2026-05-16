@@ -1,4 +1,6 @@
 #!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
 
 echo "
 ███████╗ ██████╗██████╗ ██╗██████╗ ████████╗    ███╗   ███╗ █████╗ ██╗███╗   ██╗
@@ -8,35 +10,49 @@ echo "
 ███████║╚██████╗██║  ██║██║██║        ██║       ██║ ╚═╝ ██║██║  ██║██║██║ ╚████║
 ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝       ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝"
 
-# SCRIPT IN
-echo "Lancement du script in"
+# ÉTAPE 1 — Préparation de l'environnement (extraction ISO, unsquashfs)
+echo "==> Étape 1/3 : Préparation"
 ./install_in.sh
+echo "Script in terminé."
 
-if [ $? -eq 0 ]; then
-    echo "Le script in s'est bien exécuté"
+# ÉTAPE 2 — Choix du profil et exécution dans le container
+echo ""
+echo "==> Étape 2/3 : Personnalisation"
+echo "Quel profil souhaitez-vous installer ?"
+echo "  1) DevOps  — nginx, git, VSCodium, RustDesk, fail2ban..."
+echo "  2) Habitant — LibreOffice, Thunderbird, Zoom, WhatsApp, FreeTube..."
+read -rp "Votre choix [1/2] : " profil
+
+case "$profil" in
+    1) script_profil="install_devops.sh" ;;
+    2) script_profil="install_habitant.sh" ;;
+    *) echo "Choix invalide. Abandon."; exit 1 ;;
+esac
+
+echo "Copie de $script_profil dans le container"
+sudo cp "$script_profil" squashfs-root/tmp/
+sudo chmod +x "squashfs-root/tmp/$script_profil"
+trap 'sudo rm -f "squashfs-root/tmp/$script_profil"' EXIT
+
+echo "Exécution de $script_profil via systemd-nspawn"
+if [ "$script_profil" = "install_habitant.sh" ]; then
+    # Expose le socket D-Bus de l'hôte — requis par flatpak-system-helper
+    sudo systemd-nspawn -D squashfs-root/ --bind /run/dbus:/run/dbus /bin/bash "/tmp/$script_profil"
 else
-    echo "Il y a eu une erreur lors de l’exécution du script in"
-    exit 1
+    sudo systemd-nspawn -D squashfs-root/ /bin/bash "/tmp/$script_profil"
 fi
 
-# SCRIPT DEVOPS
-echo "Lancement du script devops"
-./install_devops.sh
+echo "Nettoyage du script dans le container"
+sudo rm -f "squashfs-root/tmp/$script_profil"
+trap - EXIT
 
-if [ $? -eq 0 ]; then
-    echo "Le script devops s'est bien exécuté"
-else 
-    echo "Il y a eu une erreur lors de l’exécution du script devops"
-    exit 1
-fi
+echo "Script $script_profil terminé."
 
-# SCRIPT OUT
-echo "Lancement du script out"
+# ÉTAPE 3 — Génération de l'ISO finale
+echo ""
+echo "==> Étape 3/3 : Génération de l'ISO"
 ./install_out.sh
+echo "Script out terminé."
 
-if [ $? -eq 0 ]; then
-    echo "Le script in s'est bien exécuté"
-else 
-    echo "Il y a eu une erreur lors de l’exécution du script out"
-    exit 1
-fi
+echo ""
+echo "ISO personnalisée générée avec succès."

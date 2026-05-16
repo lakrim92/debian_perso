@@ -1,26 +1,37 @@
 #!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
 
 echo "
 ███████╗ ██████╗██████╗ ██╗██████╗ ████████╗     ██████╗ ██╗   ██╗████████╗
 ██╔════╝██╔════╝██╔══██╗██║██╔══██╗╚══██╔══╝    ██╔═══██╗██║   ██║╚══██╔══╝
-███████╗██║     ██████╔╝██║██████╔╝   ██║       ██║   ██║██║   ██║   ██║   
-╚════██║██║     ██╔══██╗██║██╔═══╝    ██║       ██║   ██║██║   ██║   ██║   
-███████║╚██████╗██║  ██║██║██║        ██║       ╚██████╔╝╚██████╔╝   ██║   
+███████╗██║     ██████╔╝██║██████╔╝   ██║       ██║   ██║██║   ██║   ██║
+╚════██║██║     ██╔══██╗██║██╔═══╝    ██║       ██║   ██║██║   ██║   ██║
+███████║╚██████╗██║  ██║██║██║        ██║       ╚██████╔╝╚██████╔╝   ██║
 ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝        ╚═════╝  ╚═════╝    ╚═╝"
 
-echo "Compression filesystem.squashfe"
-sudo mksquashfs  squashfs-root/ filesystem.squashfs -comp xz -b 1M -noappend
+ISO_LABEL="Debian Live 12.5.0 amd64"
+ISO_OUTPUT="debian-live-12.5.0-custom-amd64.iso"
 
-echo "Copie a nouveau le fichier filesystem.squashfs dans le dossier iso/live/"
+echo "Compression filesystem.squashfs"
+sudo mksquashfs squashfs-root/ filesystem.squashfs -comp xz -b 1M -noappend
+
+echo "Copie du filesystem.squashfs dans iso/live/"
 cp filesystem.squashfs ./iso/live/
 
-echo "Calcul et sauvegarde du checksum"
-md5sum iso/.disk/info > iso/md5sum.txt
-
-echo "Remplacement des occurrences"
+echo "Calcul et sauvegarde des checksums"
+find iso -type f -print0 | sort -z | xargs -0 md5sum > iso/md5sum.txt
 sed -i 's|iso/|./|g' iso/md5sum.txt
 
 echo "Compression de l'image ISO"
-xorriso -as mkisofs -r -V "Debian Live 12.5.0 amd64" -o debian-live-12.5.0-custom-amd64.iso -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot -isohybrid-gpt-basdat -isohybrid-apm-hfsplus -isohybrid-mbr /usr/lib/ISOLINUX/isohdppx.bin iso/boot iso
+xorriso -as mkisofs -r -V "$ISO_LABEL" -o "$ISO_OUTPUT" \
+    -J -l \
+    -b isolinux/isolinux.bin \
+    -c isolinux/boot.cat \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot \
+    -isohybrid-gpt-basdat -isohybrid-apm-hfsplus \
+    -isohybrid-mbr /usr/lib/ISOLINUX/isohdppx.bin \
+    iso/boot iso
 
-echo "Execution du script terminer"
+echo "Script out terminé. ISO générée : $ISO_OUTPUT"

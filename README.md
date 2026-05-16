@@ -1,165 +1,81 @@
 # Debian Garage
 
-Ceci est un ensemble de scripts permettant de créer une image ISO Debian 12 Live personnalisée. 
-Suivez les instructions ci-dessous pour préparer et personnaliser votre image.
+Ensemble de scripts pour créer une image ISO Debian 12 Live personnalisée de façon entièrement automatisée.
 
 ## Pré-requis
 
-Avoir cloné ce repository.
+- Machine de build **x86_64** sous Debian/Ubuntu
+- Image ISO Debian 12 Live placée dans le même dossier que les scripts
+- Droits `sudo`
 
-Assurez-vous d'avoir dans le dossier contenant les scripts l'image ISO Debian 12 Live que vous souhaitez personnaliser.
+Les outils nécessaires (`xorriso`, `squashfs-tools`, `systemd-container`, etc.) sont installés automatiquement par le script.
 
-Avec la commande suivante, assurez-vous d'avoir les droits d'exécution des 3 scripts avant de les lancer.
+## Utilisation
 
-    ```
-    chmod +x le nom_du_script
-    ```
+### Lancement tout-en-un
 
-## I. Étapes de personnalisation
+```bash
+chmod +x *.sh
+./install_main.sh
+```
 
-1. Lancez le premier script
+Le script demande interactivement quel profil installer, puis enchaîne les 3 étapes sans intervention manuelle.
 
-    ```
-    ./install_in.sh
-    ```
+### Profils disponibles
 
-2. Lorsque le script a terminé de s'exécuter, suivez ces étapes manuellement : 
-    
-    - Ajoutez un serveur DNS
-        ```
-        echo 'nameserver 1.1.1.1' > /etc/resolv.conf
-        ```
+| Profil | Utilisateur créé | Logiciels |
+|--------|-----------------|-----------|
+| **DevOps** | `bellinuxien` | nginx, git, VSCodium, RustDesk, fail2ban, openssh-server... |
+| **Habitant** | `habitant` | LibreOffice, Thunderbird, Zoom, WhatsApp, FreeTube, Teams... |
 
-    - Montez le système de fichiers devpts
-        ```
-        mount devpts /dev/pts -t devpts
-        ```
+### Étapes automatisées
 
-3. Création et configuration de l'utilisateur :
+```
+Étape 1/3 — Préparation    install_in.sh
+  └─ Installation des outils (xorriso, squashfs-tools, systemd-container...)
+  └─ Extraction de l'ISO dans iso/
+  └─ Décompression du filesystem.squashfs
 
-    - Créez un utilisateur
-        ```
-        adduser nom_utilisateur
-        ```
+Étape 2/3 — Personnalisation    install_devops.sh | install_habitant.sh
+  └─ Exécution dans un container systemd-nspawn (proc/sys/dev/D-Bus inclus)
+  └─ Création de l'utilisateur, installation des paquets, configuration
 
-    - Ajoutez l'utilisateur au groupe `sudo`
-        ```
-        usermod -aG sudo nom_utilisateur
-        ```
+Étape 3/3 — Génération    install_out.sh
+  └─ Recompression du filesystem.squashfs (format xz)
+  └─ Calcul des checksums md5
+  └─ Génération de l'ISO finale : debian-live-12.5.0-custom-amd64.iso
+```
 
-    - Changez de session pour l'utilisateur créé
-        ```
-        su - nom_utilisateur
-        ```
+## Utilisation des scripts individuellement
 
-## II. OPTIONS 1 (DEVOPS) - Installation des paquets et configurations 
+Chaque script peut aussi être lancé seul depuis son répertoire :
 
-1. Installation des paquets :
+```bash
+./install_in.sh       # Prépare l'environnement (extraction ISO)
+./install_out.sh      # Génère l'ISO finale
+```
 
-    ```
-    sudo apt install rsyslog wget curl git net-tools iptables resolvconf rsyslog python3-pip python3-venv zip openssh-server gimp fail2ban vlc nginx -y
-    ```
+## Personnalisation
 
-2. Désactivation de services :
+Les variables configurables sont en tête de chaque script :
 
-    - Désactivez rsyslog
-        ```
-        sudo systemctl stop rsyslog && sudo systemctl disable rsyslog
-        ```
+**`install_devops.sh`**
+```bash
+USER_NAME="bellinuxien"
+RUSTDESK_VERSION="1.2.4"
+VSCODIUM_VERSION="1.89.1.24130"
+```
 
-    - Désactivez nginx
-        ```
-        sudo systemctl stop nginx && sudo systemctl disable nginx
-        ```
+**`install_habitant.sh`**
+```bash
+USER_NAME="habitant"
+```
 
-3. Configuration des sources :
-
-    - Remplacez la liste des sources
-        ```
-        sudo curl -o /etc/apt/sources.list https://git.legaragenumerique.fr/GARAGENUM/apt-debian-12-bookworm/raw/branch/main/sources.list
-        ```
-4. Installation de logiciels supplémentaires :
-
-    - Intallation rustdesk
-        ```
-        curl -LO https://github.com/rustdesk/rustdesk/releases/download/1.2.4/rustdesk-1.2.4-x86_64.deb && sudo dpkg -i rustdesk-1.2.4-x86_64.deb
-        ```
-
-    - Installation VSCodium
-        ```
-        curl -LO https://github.com/VSCodium/vscodium/releases/download/1.89.1.24130/codium_1.89.1.24130_amd64.deb && sudo dpkg -i codium_1.89.1.24130_amd64.deb
-        ```
-
-    - Suppression des pack .deb
-        ```
-        rm codium_1.89.1.24130_amd64.deb rustdesk-1.2.4-x86_64.deb
-        ```
-
-5. Nettoyage
-
-    - Avant de quitter l'environnement, il faut nettoyer :
-        ```
-        sudo apt-get clean
-        ```
-        ```
-        history -c
-        ```
-        ```
-        exit
-        ```
-
-## II. OPTION 2 (HABITANT) - Installation des paquets et configurations (Avec Flatpak)
-
-1. Installation de flatpak :
-
-    ```
-    sudo apt install flatpak -y
-    ```
-
-2. Ajout du dépôt flathub
-
-    ```
-    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-    ```
-
-3. Installation des application flatpak
-
-    ```
-    flatpak install flathub org.libreoffice.LibreOffice org.mozilla.Thunderbird com.github.IsmaelMartinez.teams_for_linux io.github.flattool.Warehouse io.freetubeapp.FreeTube im.riot.Riot us.zoom.Zoom io.github.mimbrero.WhatsAppDesktop
-    ```
-
-    - Applications Installées :
-
-        Whatsapp, Freetube, Thunderbird, Zoom, Warehouse, LibreOffice, Teams
-
-4. Nettoyage
-
-    - Avant de quitter l'environnement, il faut nettoyer :
-        ```
-        sudo apt-get clean
-        ```
-        ```
-        history -c
-        ```
-        ```
-        exit
-        ```
-
-## III. Lancer le 2ème script 
-
-1. Une fois les modifications effectuées, lancez le deuxième script pour créer l'image personnalisée :
-    
-    - Lancement du script
-        ```
-        ./install_out.sh
-        ```
-
-2. Une fois l'image créée, ne pas oublier de démonter le système de fichiers devpts :
-
-    - Démonter le système de fichier devpts
-        ```
-        sudo umount devpts /dev/pts -t devpts
-        ```
+**`install_out.sh`**
+```bash
+ISO_LABEL="Debian Live 12.5.0 amd64"
+ISO_OUTPUT="debian-live-12.5.0-custom-amd64.iso"
+```
 
 ## Docs
 
@@ -169,7 +85,7 @@ https://dev.to/otomato_io/how-to-create-custom-debian-based-iso-4g37
 ### xorriso
 https://www.gnu.org/software/xorriso/
 
-### fakeroot 
+### fakeroot
 https://docs.sylabs.io/guides/3.7/user-guide/fakeroot.html
 
 ### squashfs-tools
