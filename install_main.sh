@@ -10,49 +10,26 @@ echo "
 ███████║╚██████╗██║  ██║██║██║        ██║       ██║ ╚═╝ ██║██║  ██║██║██║ ╚████║
 ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝       ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝"
 
-# ÉTAPE 1 — Préparation de l'environnement (extraction ISO, unsquashfs)
-echo "==> Étape 1/3 : Préparation"
-./install_in.sh
-echo "Script in terminé."
-
-# ÉTAPE 2 — Choix du profil et exécution dans le container
 echo ""
-echo "==> Étape 2/3 : Personnalisation"
 echo "Quel profil souhaitez-vous installer ?"
-echo "  1) DevOps  — nginx, git, VSCodium, RustDesk, fail2ban..."
-echo "  2) Habitant — LibreOffice, Thunderbird, Zoom, WhatsApp, FreeTube..."
-read -rp "Votre choix [1/2] : " profil
+echo "  1) DevOps  — nginx, git, VSCodium, RustDesk, fail2ban, openssh-server..."
+echo "  2) Habitant — LibreOffice, Thunderbird, Zoom, WhatsApp, FreeTube, Teams..."
+read -rp "Votre choix [1/2] : " choix
 
-case "$profil" in
-    1) script_profil="install_devops.sh" ;;
-    2) script_profil="install_habitant.sh" ;;
+case "$choix" in
+    1) PROFIL="devops" ;;
+    2) PROFIL="habitant" ;;
     *) echo "Choix invalide. Abandon."; exit 1 ;;
 esac
 
-echo "Copie de $script_profil dans le container"
-sudo cp "$script_profil" squashfs-root/tmp/
-sudo chmod +x "squashfs-root/tmp/$script_profil"
-trap 'sudo rm -f "squashfs-root/tmp/$script_profil"' EXIT
-
-echo "Exécution de $script_profil via systemd-nspawn"
-if [ "$script_profil" = "install_habitant.sh" ]; then
-    # Expose le socket D-Bus de l'hôte — requis par flatpak-system-helper
-    sudo systemd-nspawn -D squashfs-root/ --bind /run/dbus:/run/dbus /bin/bash "/tmp/$script_profil"
-else
-    sudo systemd-nspawn -D squashfs-root/ /bin/bash "/tmp/$script_profil"
-fi
-
-echo "Nettoyage du script dans le container"
-sudo rm -f "squashfs-root/tmp/$script_profil"
-trap - EXIT
-
-echo "Script $script_profil terminé."
-
-# ÉTAPE 3 — Génération de l'ISO finale
 echo ""
-echo "==> Étape 3/3 : Génération de l'ISO"
-./install_out.sh
-echo "Script out terminé."
+echo "==> Étape 1/2 : Préparation de l'ISO source"
+./install_in.sh
 
 echo ""
-echo "ISO personnalisée générée avec succès."
+echo "==> Étape 2/2 : Génération de l'ISO personnalisée ($PROFIL)"
+./install_out.sh "$PROFIL"
+
+echo ""
+echo "ISO prête. Testez-la dans VirtualBox ou installez-la sur une machine physique."
+echo "Mot de passe par défaut : debian (à changer dans preseed_${PROFIL}.cfg)"

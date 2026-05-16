@@ -12,7 +12,6 @@ echo "
 
 check_installed_packages() {
     local to_install=()
-
     for package in "$@"; do
         if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             echo "$package est déjà installé."
@@ -20,7 +19,6 @@ check_installed_packages() {
             to_install+=("$package")
         fi
     done
-
     if [ ${#to_install[@]} -gt 0 ]; then
         sudo apt-get update
         sudo apt-get install -y "${to_install[@]}"
@@ -28,36 +26,34 @@ check_installed_packages() {
 }
 
 echo "Installation des outils requis"
-check_installed_packages xorriso fakeroot squashfs-tools syslinux syslinux-efi isolinux systemd-container
+check_installed_packages xorriso python3
 
-echo "Décompression de l'image ISO"
+echo "Recherche de l'ISO Debian netinstall"
 mapfile -t fichiers_iso < <(find "$PWD" -maxdepth 1 -type f -iname "*.iso")
 
-if [ ${#fichiers_iso[@]} -gt 0 ]; then
-    for fichier_iso in "${fichiers_iso[@]}"; do
-        if [ ! -d "iso" ]; then
-            xorriso -osirrox on -indev "$fichier_iso" -extract / iso && chmod -R +w iso
-        else
-            echo "Un dossier 'iso' existe déjà."
-        fi
-    done
-else
-    echo "Aucun fichier ISO trouvé dans le répertoire courant."
+if [ ${#fichiers_iso[@]} -eq 0 ]; then
+    echo ""
+    echo "Aucun fichier ISO trouvé. Placez l'ISO Debian 12 netinstall dans ce dossier."
+    echo "Téléchargement : https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"
+    echo "Exemple : debian-12.x.x-amd64-netinst.iso"
     exit 1
 fi
 
-echo "Copie du fichier filesystem.squashfs"
-if [ ! -f filesystem.squashfs ]; then
-    cp iso/live/filesystem.squashfs .
+ISO_SOURCE="${fichiers_iso[0]}"
+echo "ISO source : $ISO_SOURCE"
+
+echo "Sauvegarde du secteur de démarrage (MBR)"
+dd if="$ISO_SOURCE" bs=432 count=1 of=mbr.bin status=none
+
+if [ ! -d "iso_work" ]; then
+    echo "Extraction de l'ISO dans iso_work/"
+    xorriso -osirrox on -indev "$ISO_SOURCE" -extract / iso_work
+    chmod -R +w iso_work
 else
-    echo "Ce fichier existe déjà dans le dossier courant"
+    echo "Dossier iso_work/ déjà existant, extraction ignorée."
 fi
 
-echo "Décompression filesystem.squashfs"
-if [ ! -d squashfs-root ]; then
-    sudo unsquashfs filesystem.squashfs
-else
-    echo "Ce dossier existe déjà"
-fi
+# Sauvegarde du chemin source pour install_out.sh
+echo "$ISO_SOURCE" > .iso_source
 
 echo "Préparation terminée."
